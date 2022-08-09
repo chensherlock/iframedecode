@@ -1,0 +1,104 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
+<title>IFrame decode</title>
+<style>
+body {
+    font-family: monospace;
+    font-size: 20px;
+    background: black;
+    color: white;
+}
+#runBtn {
+    color: white;
+    background-color: #9019cb;
+    min-width: 100px;
+    font-size: 20px;
+    border-radius: 5px;
+}
+#rounds {
+    font-size: 22px;
+    color:rgb(17, 211, 245);
+}
+</style>
+</head>
+<body>
+<h3>IFrame Decode</h3>
+<div id="rounds"></div>
+<div id="duration"></div>
+<button class="btn" id="runBtn" style="visibility:visible" onclick="doTask();">Run</button>
+<script>
+if (location.protocol !== 'https:') {
+    location.replace(`https:${location.href.substring(location.protocol.length)}`);
+}
+function $(x) { return document.getElementById(x); } 
+
+var iFrame;
+
+async function doTask() {
+    var mp3url = 'https://raw.githubusercontent.com/chensherlock/iframedecode/master/music.mp3';    
+    buttons = document.querySelectorAll(".btn");
+    buttons.forEach(button => button.style.visibility = 'hidden');
+
+    var response = await fetch(mp3url);
+    arrayBuffer = await response.arrayBuffer();
+    audiodata = arrayBuffer.slice(0);
+    var ctx = new window.AudioContext;
+    var oBuffer = await ctx.decodeAudioData(audiodata);
+    var oLength = oBuffer.length;
+    var oSampleRate = oBuffer.sampleRate;
+    oBuffer = null;
+
+    for (var i=0; i<1000; i++) {
+        $('rounds').innerText = 'ROUND ' + i;
+        var offlineCtx = getIFrameOfflineContext(2, oLength, oSampleRate);
+        var response = await fetch(mp3url);
+        arrayBuffer = await response.arrayBuffer();
+        audiodata = arrayBuffer.slice(0);
+        $('duration').innerText = '';
+        var buffer = await offlineCtx.decodeAudioData(audiodata);
+        $('duration').innerText = buffer.duration.toFixed(2) + ' seconds';
+
+        await new Promise((resolve) => {
+            setTimeout(resolve, 50);
+        });
+    }
+    buttons = document.querySelectorAll(".btn");
+    buttons.forEach(button => button.style.visibility = 'visible');
+}
+
+function createIframe() {
+    iFrame = document.createElement('iframe');
+    iFrame.style.display = 'none';
+    iFrame.onload = () => {
+        const script = document.createElement('script');
+        script.innerHTML =
+          `
+            function reload() {
+              location.reload();
+            }
+
+            function createOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate) {
+              return new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(NUMBER_OF_CHANNEL,duration,sampleRate);
+            }
+          `;
+        iFrame.contentDocument.body.appendChild(script);
+    };
+    document.body.appendChild(iFrame);
+}
+
+function getIFrameOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate) {
+    if (iFrame) {
+        iFrame.parentNode.removeChild(iFrame);
+        iFrame.onload = null;
+        iFrame = null;
+    }
+    createIframe();
+    return iFrame.contentWindow.createOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate);
+}
+</script>
+</body>
+</html>
