@@ -21,7 +21,7 @@ body {
 }
 #rounds {
     font-size: 22px;
-    color:rgb(17, 211, 245);
+    color:white;
 }
 </style>
 </head>
@@ -39,21 +39,25 @@ function $(x) { return document.getElementById(x); }
 var iFrame;
 
 async function doTask() {
-    var mp3url = 'https://raw.githubusercontent.com/chensherlock/iframedecode/master/music.mp3';    
+    var mp3url = 'https://raw.githubusercontent.com/chensherlock/audiocontextleak/master/music.mp3';    
     buttons = document.querySelectorAll(".btn");
     buttons.forEach(button => button.style.visibility = 'hidden');
 
     var response = await fetch(mp3url);
     arrayBuffer = await response.arrayBuffer();
+    response = null;
     audiodata = arrayBuffer.slice(0);
+    arrayBuffer = null;
     var ctx = new window.AudioContext;
     var oBuffer = await ctx.decodeAudioData(audiodata);
+    ctx.close();
     var oLength = oBuffer.length;
     var oSampleRate = oBuffer.sampleRate;
     oBuffer = null;
 
-    for (var i=0; i<1000; i++) {
-        $('rounds').innerText = 'ROUND ' + i;
+    for (var i=0;i<10000;i++) {
+        $('rounds').style.color = "hsl(" + (120 - Math.log10(i) * 30) + ",100%,50%)";
+        $('rounds').innerText = i;
         var offlineCtx = getIFrameOfflineContext(2, oLength, oSampleRate);
         var response = await fetch(mp3url);
         arrayBuffer = await response.arrayBuffer();
@@ -61,7 +65,6 @@ async function doTask() {
         $('duration').innerText = '';
         var buffer = await offlineCtx.decodeAudioData(audiodata);
         $('duration').innerText = buffer.duration.toFixed(2) + ' seconds';
-
         await new Promise((resolve) => {
             setTimeout(resolve, 50);
         });
