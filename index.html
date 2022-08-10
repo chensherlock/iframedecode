@@ -14,93 +14,140 @@ body {
 }
 #runBtn {
     color: white;
-    background-color: #9019cb;
-    min-width: 100px;
+    padding: 10px 24px;
+    background-color: #008CBA;;
     font-size: 20px;
-    border-radius: 5px;
 }
 #rounds {
-    font-size: 22px;
+    font-size: 30px;
     color:white;
 }
 </style>
 </head>
 <body>
 <h3>IFrame Decode</h3>
+<fieldset>
+    <legend>Audio Context:</legend>
+    <div>
+        <input type="radio" id="mainCtx" name="context" value="main,online">
+        <label for="mainCtx">MainFrame AudioContext</label>
+    </div>
+    <div>
+        <input type="radio" id="mainOffCtx" name="context" value="main,offline">
+        <label for="mainOffCtx">MainFrame OfflineAudioContext</label>
+    </div>
+    <div>
+        <input type="radio" id="mainCtxRe" name="context" value="main,online,xframe">
+        <label for="mainCtxRe">MainFrame AudioContext & add and remove IFrame</label>
+    </div>
+    <div>
+        <input type="radio" id="mainOffCtxRe" name="context" value="main,offline,xframe">
+        <label for="mainOffCtxRe">MainFrame OfflineAudioContext & add and remove IFrame</label>
+    </div>
+    <div>
+        <input type="radio" id="iframeCtx" name="context" value="iframe,online">
+        <label for="iframeCtx">IFrame AudioContext</label>
+    </div>
+    <div>
+        <input type="radio" id="iframeOffCtx" name="context" value="iframe,offline" checked>
+        <label for="iframeOffCtx">IFrame OfflineAudioContext</label>
+    </div>
+</fieldset><br>
+<button class="btn" id="runBtn" onclick="run();">RUN</button>
 <div id="rounds"></div>
 <div id="duration"></div>
-<button class="btn" id="runBtn" style="visibility:visible" onclick="doTask();">Run</button>
+<div id="time"></div>
 <script>
 if (location.protocol !== 'https:') {
     location.replace(`https:${location.href.substring(location.protocol.length)}`);
 }
-function $(x) { return document.getElementById(x); } 
+function $(x) { return document.getElementById(x); }
 
-var iFrame;
+var isRunning = false;
+var count = 0;
 
-async function doTask() {
-    var mp3url = 'https://raw.githubusercontent.com/chensherlock/audiocontextleak/master/music.mp3';    
-    buttons = document.querySelectorAll(".btn");
-    buttons.forEach(button => button.style.visibility = 'hidden');
+async function run() {
+    if (isRunning) {
+        isRunning = false;
+        return;
+    }
+
+    isRunning = true;
+    $('rounds').innerText = 'LOADING...';
+    var mp3url = 'https://raw.githubusercontent.com/chensherlock/audiocontextleak/master/music.mp3';
+    $('runBtn').innerText = 'PAUSE';
 
     var response = await fetch(mp3url);
-    arrayBuffer = await response.arrayBuffer();
+    var arrayBuffer = await response.arrayBuffer();
     response = null;
-    audiodata = arrayBuffer.slice(0);
-    arrayBuffer = null;
+    var audiodata = arrayBuffer.slice(0);
+    $('rounds').innerText = 'DECODING...';
     var ctx = new window.AudioContext;
     var oBuffer = await ctx.decodeAudioData(audiodata);
+    audiodata = null;
     ctx.close();
-    var oLength = oBuffer.length;
-    var oSampleRate = oBuffer.sampleRate;
+    ctx = null;
+    $('rounds').innerText = 'DECODED';
+    var bufChannels = oBuffer.numberOfChannels;
+    var bufLength = oBuffer.length;
+    var bufSampleRate = oBuffer.sampleRate;
     oBuffer = null;
+    var iframe;
+    while (isRunning) {
+        $('rounds').style.color = "hsl(" + (120 - Math.log10(count) * 30) + ",100%,50%)";
+        $('rounds').innerText = count;
+        document.title = 'IFrame Decode #' + count;
 
-    for (var i=0;i<10000;i++) {
-        $('rounds').style.color = "hsl(" + (120 - Math.log10(i) * 30) + ",100%,50%)";
-        $('rounds').innerText = i;
-        var offlineCtx = getIFrameOfflineContext(2, oLength, oSampleRate);
-        var response = await fetch(mp3url);
-        arrayBuffer = await response.arrayBuffer();
+        var selValue = document.querySelector( 'input[name="context"]:checked').value;
+
+        if (selValue.includes('iframe')) {
+            iframe = document.createElement("iframe");
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+        }
+
+        if (selValue.includes('main') && selValue.includes('online')) {
+            ctx = new window.AudioContext();
+        } else if (selValue.includes('main') && selValue.includes('offline')) {
+            ctx = new window.OfflineAudioContext(bufChannels, bufLength, bufSampleRate);
+        } else if (selValue.includes('iframe') && selValue.includes('online')) {
+            ctx = new iframe.contentWindow.AudioContext();
+        } else if (selValue.includes('iframe') && selValue.includes('offline')) {
+            ctx = new iframe.contentWindow.OfflineAudioContext(bufChannels, bufLength, bufSampleRate);
+        }
+
         audiodata = arrayBuffer.slice(0);
-        $('duration').innerText = '';
-        var buffer = await offlineCtx.decodeAudioData(audiodata);
+        $('duration').innerText = 'Decoding...';
+        var startTime = new Date();
+        var buffer = await ctx.decodeAudioData(audiodata);
+        var endTime = new Date();
+        var ms = endTime.getTime() - startTime.getTime();
+        $('time').innerText = ms + ' ms';
+        if (ctx.__proto__.constructor.name === 'AudioContext') {
+            ctx.close();
+        }
+        ctx = null;
+        if (iframe) {
+            document.body.removeChild(iframe);
+            iframe = null;
+        }
+
+        if (selValue.includes('xframe')) {
+            var xframe = document.createElement("iframe");
+            xframe.style.display = 'none';
+            document.body.appendChild(xframe);
+            document.body.removeChild(xframe);
+            xframe = null;
+        }
+
         $('duration').innerText = buffer.duration.toFixed(2) + ' seconds';
         await new Promise((resolve) => {
-            setTimeout(resolve, 50);
+            setTimeout(resolve, 200);
         });
+        count++;
     }
-    buttons = document.querySelectorAll(".btn");
-    buttons.forEach(button => button.style.visibility = 'visible');
-}
-
-function createIframe() {
-    iFrame = document.createElement('iframe');
-    iFrame.style.display = 'none';
-    iFrame.onload = () => {
-        const script = document.createElement('script');
-        script.innerHTML =
-          `
-            function reload() {
-              location.reload();
-            }
-
-            function createOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate) {
-              return new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(NUMBER_OF_CHANNEL,duration,sampleRate);
-            }
-          `;
-        iFrame.contentDocument.body.appendChild(script);
-    };
-    document.body.appendChild(iFrame);
-}
-
-function getIFrameOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate) {
-    if (iFrame) {
-        iFrame.parentNode.removeChild(iFrame);
-        iFrame.onload = null;
-        iFrame = null;
-    }
-    createIframe();
-    return iFrame.contentWindow.createOfflineContext(NUMBER_OF_CHANNEL, duration, sampleRate);
+    $('runBtn').innerText = 'RUN';
+    isRunning = false;
 }
 </script>
 </body>
